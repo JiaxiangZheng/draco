@@ -86,6 +86,43 @@ THREE.DRACOLoader.prototype = {
           geometryType, buffer));
     },
 
+		// TODO: reduce GC frequency
+    constructPopBuffer(geometryBuffer) {
+			console.time('constructPopBuffer');
+			let norms = [];
+			let uvs   = [];
+
+      let index = geometryBuffer.index;
+			let array = index.array;
+			let cells = new Array(index.count / 3);
+
+			let tmp_arr = [0, 0, 0]
+      for (let fIndex = 0, i = 0; fIndex < index.count; fIndex += 3, i += 1) {
+				tmp_arr[0] = array[fIndex + 0];
+				tmp_arr[1] = array[fIndex + 1];
+				tmp_arr[2] = array[fIndex + 2];
+				cells[i] = [tmp_arr[0], tmp_arr[1], tmp_arr[2]];
+      }
+
+      const attributes = geometryBuffer.attributes;
+
+			const position = attributes.position;
+			array = attributes.position.array;
+			let positions = new Array(array.length / position.itemSize);
+			for (let vIndex = 0, i = 0; vIndex < array.length; vIndex += position.itemSize, i += 1) {
+				tmp_arr[0] = array[vIndex + 0];
+				tmp_arr[1] = array[vIndex + 1];
+				tmp_arr[2] = array[vIndex + 2];
+				positions[i] = [tmp_arr[0], tmp_arr[1], tmp_arr[2]];
+			}
+
+			console.timeEnd('constructPopBuffer');
+      return {
+				cells,
+				positions
+			};
+    },
+
     convertDracoGeometryTo3JS: function(dracoDecoder, wrapper, geometryType,
                                         buffer) {
         let dracoGeometry;
@@ -266,12 +303,23 @@ THREE.DRACOLoader.prototype = {
           geometry.addAttribute('uv',
               new THREE.Float32BufferAttribute(geometryBuffer.uvs, 2));
         }
+
+        // TODO(xuanfeng): construct LOD of pop-buffer information (solve the performance issue)
+        const popbuffer_start = performance.now();
+        const pbInfo = this.constructPopBuffer(geometry);
+				if (window.pb) {
+					const buf = pb.encode(pbInfo.cells, pbInfo.positions, 16);
+					console.log(buf);
+				}
+
         this.decode_time = decode_end - start_time;
-        this.import_time = performance.now() - decode_end;
+        this.import_time = popbuffer_start - decode_end;
+        this.encode_pop_buffer_time = performance.now() - popbuffer_start;
 
         if (this.verbosity > 0) {
           console.log('Decode time: ' + this.decode_time);
           console.log('Import time: ' + this.import_time);
+          console.log('Popbuffer time: ' + this.encode_pop_buffer_time);
         }
         return geometry;
     },
