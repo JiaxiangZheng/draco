@@ -17,24 +17,24 @@ function computeBoundingBox(positions) {
     max[i] = -Infinity;
   }
 
-	for (let index = 0; index < positions.length; index++) {
-		let position = positions[index];
+  for (let index = 0; index < positions.length; index++) {
+    let position = positions[index];
     for(var i=0; i<dimensions; i++) {
       max[i] = position[i] > max[i] ? position[i] : max[i];
       min[i] = position[i] < min[i] ? position[i] : min[i];
     }
-	}
+  }
 
   return [min, max];
 }
 function roundVertices(positions) {
-	// reduce GC, so abort the map method
-	for (let i = 0; i < positions.length; i++) {
-		for (let j = 0; j < 3; j++) {
-			positions[i][j] = positions[i][j] | 0;
-		}
-	}
-	return positions;
+  // reduce GC, so abort the map method
+  for (let i = 0; i < positions.length; i++) {
+    for (let j = 0; j < 3; j++) {
+      positions[i][j] = positions[i][j] | 0;
+    }
+  }
+  return positions;
 
   return positions.map(function(position) {
     return position.map(function(value) {
@@ -81,13 +81,13 @@ function rescaleVertices(positions, targetBounds, sourceBounds) {
   }
 
 
-	for (let i = 0; i < positions.length; i++) {
-		let position = positions[i];
-    for (let j = 0; j < dimensions; j++) {
-      positions[i][j] = (position[j] - sourceBounds[0][j]) / sourceSpans[j] * targetSpans[j] + targetBounds[0][j];
-    }
-	}
-	return positions;
+  // for (let i = 0; i < positions.length; i++) {
+  //   let position = positions[i];
+  //   for (let j = 0; j < dimensions; j++) {
+  //     positions[i][j] = (position[j] - sourceBounds[0][j]) / sourceSpans[j] * targetSpans[j] + targetBounds[0][j];
+  //   }
+  // }
+  // return positions;
 
   return positions.map(function(position) {
     var rescaled = new Array(dimensions);
@@ -101,7 +101,8 @@ function rescaleVertices(positions, targetBounds, sourceBounds) {
 function encode(cells, positions, maxLevel) {
   var boundingBox = computeBoundingBox(positions);
 
-  var buckets = buildBuckets(cells, positions, maxLevel);
+  // var buckets = buildBuckets(cells, positions, maxLevel);
+  var buckets = buildNewBuckets(cells, positions, maxLevel);
   var levels = buildLevels(buckets, positions);
 
   return {
@@ -179,6 +180,7 @@ function buildLevels(buckets, positions) {
 }
 
 // 最终返回的是分层的面片信息
+// TODO: speedup this
 function buildBuckets(cells, positions, maxLevel) {
   var cellLevels = new Array(cells.length);
 
@@ -190,7 +192,7 @@ function buildBuckets(cells, positions, maxLevel) {
     cellLevels[i] = -1;
   }
 
-	const boundingBox = computeBoundingBox(positions);
+  const boundingBox = computeBoundingBox(positions);
 
   /*
    * Go from the maximum quantization level down to 1 and update the pop level
@@ -200,7 +202,7 @@ function buildBuckets(cells, positions, maxLevel) {
 
     // Quantize the positions at "level" bits precision
     var quantizedPositions = quantizeVertices(positions, level, boundingBox);
-
+    // console.log(level, quantizedPositions[0])
     // Extract the indices of non-degenerate cells at this level
     var cellIndices = listNonDegenerateCells(cells, quantizedPositions);
 
@@ -222,11 +224,61 @@ function buildBuckets(cells, positions, maxLevel) {
    * ignoring never-popping cells
    */
   for (var i = 0; i < cellLevels.length; i++) {
+    if (i < 30) {
+      // console.log(i, cellLevels[i]);
+    }
     var cellLevel = cellLevels[i];
     if (cellLevel === -1) {
       continue;
     }
     buckets[cellLevel - 1].push(cells[i]);
+  }
+  return buckets;
+}
+
+// BUG: different to the buildBuckets method
+function buildNewBuckets(cells, positions, maxLevel) {
+  function getLevel(v1, v2) {
+    let level = 0;
+    while (level < maxLevel) {
+        if (v1 !== v2) {
+          v1 = v1 >> 1; v2 = v2 >> 1;
+          level += 1;
+        } else {
+          break;
+        }
+    }
+    return level;
+  }
+
+  function getVLevel(p, q) {
+    return Math.max(getLevel(p[0], q[0]), getLevel(p[1], q[1]), getLevel(p[2], q[2]));
+  }
+
+  function getTLevel(A, B, C) {
+    return Math.min(getVLevel(A, B), getVLevel(B, C), getVLevel(A, C))
+  }
+  
+  const boundingBox = computeBoundingBox(positions);
+  const quantizedPositions = quantizeVertices(positions, maxLevel, boundingBox);
+
+  var buckets = new Array(maxLevel);
+
+  // Initialize each bucket to an empty array
+  for (var i = 0; i < maxLevel; i++) {
+    buckets[i] = [];
+  }
+  for (var i = 0; i < cells.length; i++) {
+    var f = cells[i];
+    var level = getTLevel(quantizedPositions[f[0]], quantizedPositions[f[1]], quantizedPositions[f[2]])
+    level = maxLevel - level;
+    if (level >= maxLevel || level < 0) {
+      continue;
+    }
+    if (i < 30) {
+      // console.log(i, level);
+    }
+    buckets[level].push(cells[i]);
   }
 
   return buckets;
@@ -279,26 +331,21 @@ function arrayEqual(a, b) {
 }
 
 if (typeof window !== 'undefined') {
-	window.pb = {
-		encode, decode
-	}
+  window.pb = {
+    encode, decode
+  }
 } else {
-	module.exports = {
-		encode: encode,
-		decode: decode
-	};
+  module.exports = {
+    encode: encode,
+    decode: decode
+  };
 }
 
 if (false) {
-/*
-var bunny = require('./bunny');
-
-console.time("pop");
-var popBuffer = encode(bunny.cells, bunny.positions, 16);
-var mesh = decode(popBuffer);
-console.timeEnd("pop");
-
-// console.log(bunny.cells);
-// console.log(mesh.cells);
-*/
+  var bunny = require('./bunny');
+  var cells = bunny.cells; 
+  var positions = bunny.positions;
+  var maxLevel = 16;
+  var buckets = buildBuckets(cells, positions, maxLevel);
+  var newBuckets = buildNewBuckets(cells, positions, maxLevel);
 }
