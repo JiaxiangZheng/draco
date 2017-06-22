@@ -512,32 +512,36 @@ void ObjDecoder::MapPointToVertexIndices(
                            AttributeValueIndex(num_positions_ + indices[0]));
   }
 
-  if (indices[1] > 0) {
-    out_point_cloud_->attribute(tex_att_id_)
-        ->SetPointMapEntry(vert_id, AttributeValueIndex(indices[1] - 1));
-  } else if (indices[1] < 0) {
-    out_point_cloud_->attribute(tex_att_id_)
-        ->SetPointMapEntry(vert_id,
-                           AttributeValueIndex(num_tex_coords_ + indices[1]));
-  } else if (tex_att_id_ >= 0) {
-    // Texture index not provided but expected. Insert 0 entry as the
-    // default value.
-    out_point_cloud_->attribute(tex_att_id_)
-        ->SetPointMapEntry(vert_id, AttributeValueIndex(0));
+  if (tex_att_id_ >= 0) {
+    if (indices[1] > 0) {
+      out_point_cloud_->attribute(tex_att_id_)
+          ->SetPointMapEntry(vert_id, AttributeValueIndex(indices[1] - 1));
+    } else if (indices[1] < 0) {
+      out_point_cloud_->attribute(tex_att_id_)
+          ->SetPointMapEntry(vert_id,
+                            AttributeValueIndex(num_tex_coords_ + indices[1]));
+    } else {
+      // Texture index not provided but expected. Insert 0 entry as the
+      // default value.
+      out_point_cloud_->attribute(tex_att_id_)
+          ->SetPointMapEntry(vert_id, AttributeValueIndex(0));
+    }
   }
 
-  if (indices[2] > 0) {
-    out_point_cloud_->attribute(norm_att_id_)
+  if (norm_att_id_ >= 0) {
+    if (indices[2] > 0) {
+      out_point_cloud_->attribute(norm_att_id_)
         ->SetPointMapEntry(vert_id, AttributeValueIndex(indices[2] - 1));
-  } else if (indices[2] < 0) {
-    out_point_cloud_->attribute(norm_att_id_)
+    } else if (indices[2] < 0) {
+      out_point_cloud_->attribute(norm_att_id_)
         ->SetPointMapEntry(vert_id,
-                           AttributeValueIndex(num_normals_ + indices[2]));
-  } else if (norm_att_id_ >= 0) {
-    // Normal index not provided but expected. Insert 0 entry as the default
-    // value.
-    out_point_cloud_->attribute(norm_att_id_)
+          AttributeValueIndex(num_normals_ + indices[2]));
+    } else {
+      // Normal index not provided but expected. Insert 0 entry as the default
+      // value.
+      out_point_cloud_->attribute(norm_att_id_)
         ->SetPointMapEntry(vert_id, AttributeValueIndex(0));
+    }
   }
 
   // Assign material index to the point if it is available.
